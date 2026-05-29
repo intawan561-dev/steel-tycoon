@@ -1010,7 +1010,7 @@ function render(time) {
   ctx.fillRect(0, 0, W, H);
 
   // Grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
   ctx.lineWidth = 1;
   for (let x = 0; x <= S.gridW; x++) {
     ctx.beginPath();
@@ -1141,21 +1141,39 @@ function drawBuilding(ctx, cell, gx, gy, time) {
 
   const m = 2; // margin
   const w = C - m * 2;
-  const h = C - m * 2;
+  
+  // Flat check: Conveyors and Roads are rendered flat on the ground
+  const isFlat = cell.type === B.CONVEYOR || cell.type === B.ROAD;
+  const depth = isFlat ? 0 : 5; // 5px 3D extrusion depth
+  const h = C - m * 2 - depth;
 
-  // Base
+  // Drop Shadow
+  if (!isFlat) {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(px + m + 2, py + m + depth, w, h);
+  }
+
+  // 3D Front Wall (extrusion)
+  if (!isFlat) {
+    ctx.fillStyle = def.colors.base;
+    ctx.fillRect(px + m, py + m + h, w, depth);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; // Dark shading overlay
+    ctx.fillRect(px + m, py + m + h, w, depth);
+  }
+
+  // Top Face Base
   const grad = ctx.createLinearGradient(px + m, py + m, px + m, py + m + h);
   grad.addColorStop(0, def.colors.top);
   grad.addColorStop(1, def.colors.base);
   ctx.fillStyle = grad;
   ctx.fillRect(px + m, py + m, w, h);
 
-  // Border
+  // Top Face Border
   ctx.strokeStyle = def.colors.border;
   ctx.lineWidth = 1;
   ctx.strokeRect(px + m + 0.5, py + m + 0.5, w - 1, h - 1);
 
-  // Glow for active buildings
+  // Glow for active buildings (renders on the top face)
   if (cell.type === B.SMELTER || cell.type === B.STEEL_MILL || cell.type === B.REFINERY) {
     if (cell.processing) {
       const pulse = 0.4 + Math.sin(time * 4) * 0.2;
@@ -1174,6 +1192,11 @@ function drawBuilding(ctx, cell, gx, gy, time) {
     ctx.strokeStyle = 'rgba(240,208,96,0.4)';
     ctx.strokeRect(px + m + 0.5, py + m + 0.5, w - 1, h - 1);
     ctx.shadowBlur = 0;
+  }
+
+  // Translate context upwards to center inner contents on the 3D top face!
+  if (!isFlat) {
+    ctx.translate(0, -depth / 2);
   }
 
   // Draw type-specific content
@@ -1209,6 +1232,11 @@ function drawBuilding(ctx, cell, gx, gy, time) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(cell.level, bx + 5, by + 5);
+  }
+
+  // Restore translation
+  if (!isFlat) {
+    ctx.translate(0, depth / 2);
   }
 }
 
