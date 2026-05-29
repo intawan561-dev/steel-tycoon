@@ -19,7 +19,46 @@ const CFG = {
   FLOAT_TEXT_MAX: 30,
   AUTOSAVE_INTERVAL: 30,  // seconds
   INCOME_WINDOW: 5,       // seconds for income averaging
+  // Isometric tile size
+  ISO_TW: 64,   // tile width (diamond horizontal span)
+  ISO_TH: 32,   // tile height (diamond vertical span)
+  ISO_LIFT: 22,  // building extrusion height in px
 };
+
+// ── Isometric coordinate helpers ──
+function isoOrigin() {
+  // Origin is the top-center of the diamond grid
+  return {
+    ox: (S.gridW + S.gridH) * CFG.ISO_TW / 2 / 2 + 20,
+    oy: 40 + CFG.ISO_LIFT
+  };
+}
+
+function gridToIso(gx, gy) {
+  const { ox, oy } = isoOrigin();
+  return {
+    sx: ox + (gx - gy) * (CFG.ISO_TW / 2),
+    sy: oy + (gx + gy) * (CFG.ISO_TH / 2)
+  };
+}
+
+function isoToGrid(sx, sy) {
+  const { ox, oy } = isoOrigin();
+  const rx = sx - ox;
+  const ry = sy - oy;
+  const tw2 = CFG.ISO_TW / 2;
+  const th2 = CFG.ISO_TH / 2;
+  const gx = (rx / tw2 + ry / th2) / 2;
+  const gy = (ry / th2 - rx / tw2) / 2;
+  return { gx: Math.floor(gx), gy: Math.floor(gy) };
+}
+
+// Get center pixel of a grid cell in iso-space
+function gridCenterIso(gx, gy) {
+  const { sx, sy } = gridToIso(gx, gy);
+  return { px: sx, py: sy + CFG.ISO_TH / 2 };
+}
+
 
 // Building type IDs
 const B = {
@@ -384,7 +423,8 @@ function placeBuilding(x, y, typeId) {
     cell.stored = 0;
   }
 
-  spawnParticles(x * CFG.CELL + CFG.CELL / 2, y * CFG.CELL + CFG.CELL / 2, '#c9a84c', 8);
+  const _pp = gridCenterIso(x, y);
+  spawnParticles(_pp.px, _pp.py, '#c9a84c', 8);
   notify('🔨', `สร้าง ${BLDG[typeId].name} แล้ว`, 'info');
   updateUI();
   return true;
@@ -399,7 +439,8 @@ function removeBuilding(x, y) {
   const refund = Math.floor(getCost(cell.type, Math.max(0, (S.buildCounts[cell.type] || 1) - 1)) * 0.5);
   S.cash += refund;
   
-  spawnParticles(x * CFG.CELL + CFG.CELL / 2, y * CFG.CELL + CFG.CELL / 2, '#c04848', 6);
+  const _rp = gridCenterIso(x, y);
+  spawnParticles(_rp.px, _rp.py, '#c04848', 6);
   notify('🗑️', `ทำลาย ${def.name} (+${formatCash(refund)})`, 'warning');
 
   // Reset cell
@@ -420,7 +461,8 @@ function upgradeBuilding(x, y) {
   S.cash -= cost;
   cell.level++;
 
-  spawnParticles(x * CFG.CELL + CFG.CELL / 2, y * CFG.CELL + CFG.CELL / 2, '#5aad6e', 10);
+  const _up = gridCenterIso(x, y);
+  spawnParticles(_up.px, _up.py, '#5aad6e', 10);
   notify('⬆️', `${def.name} อัปเกรดเป็น Lv.${cell.level} แล้ว`, 'success');
   updateUI();
   return true;
@@ -670,8 +712,9 @@ function updateResearchLabs(dt) {
       if (cell.prodTimer >= interval) {
         cell.prodTimer -= interval;
         S.rp += 1;
-        spawnFloatText(x * CFG.CELL + CFG.CELL / 2, y * CFG.CELL, '+1 RP', '#10b981');
-        spawnParticles(x * CFG.CELL + CFG.CELL / 2, y * CFG.CELL + CFG.CELL / 2, '#10b981', 3);
+        const _rpi = gridCenterIso(x, y);
+        spawnFloatText(_rpi.px, _rpi.py - 15, '+1 RP', '#10b981');
+        spawnParticles(_rpi.px, _rpi.py, '#10b981', 3);
         updateUI();
       }
     }
@@ -735,10 +778,10 @@ function collectItem(itemType, collectorCell, cx, cy) {
   S.totalEarned += value;
   S.incomeLog.push({ time: S.gameTime, amount: value });
 
-  // Floating text
-  spawnFloatText(cx * CFG.CELL + CFG.CELL / 2, cy * CFG.CELL, `+$${value}`, '#f0d060');
+  const _cp = gridCenterIso(cx, cy);
+  spawnFloatText(_cp.px, _cp.py - 15, `+$${value}`, '#f0d060');
   // Particles
-  spawnParticles(cx * CFG.CELL + CFG.CELL / 2, cy * CFG.CELL + CFG.CELL / 2, '#f0d060', 4);
+  spawnParticles(_cp.px, _cp.py, '#f0d060', 4);
 }
 
 function updateIncomeRate() {
@@ -1225,11 +1268,10 @@ function demolishRandomBuilding(typesArray) {
   if (S.buildCounts[cell.type] > 0) S.buildCounts[cell.type]--;
   
   // Explode particles
-  const px = choice.x * CFG.CELL + CFG.CELL / 2;
-  const py = choice.y * CFG.CELL + CFG.CELL / 2;
-  spawnParticles(px, py, '#ef4444', 15);
-  spawnParticles(px, py, '#555555', 10);
-  spawnFloatText(px, py - 10, 'ตูม! 💥', '#ef4444');
+  const _dp = gridCenterIso(choice.x, choice.y);
+  spawnParticles(_dp.px, _dp.py, '#ef4444', 15);
+  spawnParticles(_dp.px, _dp.py, '#555555', 10);
+  spawnFloatText(_dp.px, _dp.py - 10, 'ตูม! 💥', '#ef4444');
   
   // Reset cell
   S.grid[choice.y][choice.x] = createCell(B.EMPTY);
@@ -1264,9 +1306,8 @@ function demolishConveyors(count) {
     if (S.buildCounts[B.CONVEYOR] > 0) S.buildCounts[B.CONVEYOR]--;
     
     // Explode particles
-    const px = choice.x * CFG.CELL + CFG.CELL / 2;
-    const py = choice.y * CFG.CELL + CFG.CELL / 2;
-    spawnParticles(px, py, '#777777', 6);
+    const _dcp = gridCenterIso(choice.x, choice.y);
+    spawnParticles(_dcp.px, _dcp.py, '#777777', 6);
     
     S.grid[choice.y][choice.x] = createCell(B.EMPTY);
   }
@@ -1290,38 +1331,69 @@ function initCanvas() {
 }
 
 function resizeCanvas() {
-  canvas.width = S.gridW * CFG.CELL;
-  canvas.height = S.gridH * CFG.CELL;
+  const tw = CFG.ISO_TW;
+  const th = CFG.ISO_TH;
+  canvas.width  = (S.gridW + S.gridH) * (tw / 2) + 40;
+  canvas.height = (S.gridW + S.gridH) * (th / 2) + 80 + CFG.ISO_LIFT;
 }
 
 function render(time) {
-  const C = CFG.CELL;
   const W = canvas.width;
   const H = canvas.height;
+  const tw = CFG.ISO_TW;
+  const th = CFG.ISO_TH;
+  const hw = tw / 2;
+  const hh = th / 2;
 
   // Clear
   ctx.fillStyle = '#0a0b0e';
   ctx.fillRect(0, 0, W, H);
 
-  // Grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+  // Draw isometric ground grid (diamond lines)
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
   ctx.lineWidth = 1;
-  for (let x = 0; x <= S.gridW; x++) {
+  // Lines along X-axis (rows: y constant)
+  for (let y = 0; y <= S.gridH; y++) {
+    const a = gridToIso(0, y);
+    const b = gridToIso(S.gridW, y);
     ctx.beginPath();
-    ctx.moveTo(x * C + 0.5, 0);
-    ctx.lineTo(x * C + 0.5, H);
+    ctx.moveTo(a.sx, a.sy);
+    ctx.lineTo(b.sx, b.sy);
     ctx.stroke();
   }
-  for (let y = 0; y <= S.gridH; y++) {
+  // Lines along Y-axis (columns: x constant)
+  for (let x = 0; x <= S.gridW; x++) {
+    const a = gridToIso(x, 0);
+    const b = gridToIso(x, S.gridH);
     ctx.beginPath();
-    ctx.moveTo(0, y * C + 0.5);
-    ctx.lineTo(W, y * C + 0.5);
+    ctx.moveTo(a.sx, a.sy);
+    ctx.lineTo(b.sx, b.sy);
     ctx.stroke();
   }
 
-  // Draw cells
+  // Draw empty floor tiles (subtle fill for ground)
   for (let y = 0; y < S.gridH; y++) {
     for (let x = 0; x < S.gridW; x++) {
+      const cell = S.grid[y][x];
+      if (cell.type === B.EMPTY) {
+        const p = gridToIso(x, y);
+        ctx.fillStyle = 'rgba(255,255,255,0.015)';
+        ctx.beginPath();
+        ctx.moveTo(p.sx, p.sy);
+        ctx.lineTo(p.sx + hw, p.sy + hh);
+        ctx.lineTo(p.sx, p.sy + th);
+        ctx.lineTo(p.sx - hw, p.sy + hh);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+
+  // Draw buildings back-to-front (painter's algorithm: sorted by x+y ascending)
+  for (let sum = 0; sum < S.gridW + S.gridH - 1; sum++) {
+    for (let x = 0; x <= sum; x++) {
+      const y = sum - x;
+      if (x >= S.gridW || y >= S.gridH || y < 0) continue;
       const cell = S.grid[y][x];
       if (cell.type !== B.EMPTY) {
         drawBuilding(ctx, cell, x, y, time);
@@ -1329,9 +1401,11 @@ function render(time) {
     }
   }
 
-  // Draw items on conveyors
-  for (let y = 0; y < S.gridH; y++) {
-    for (let x = 0; x < S.gridW; x++) {
+  // Draw items on conveyors (same back-to-front order)
+  for (let sum = 0; sum < S.gridW + S.gridH - 1; sum++) {
+    for (let x = 0; x <= sum; x++) {
+      const y = sum - x;
+      if (x >= S.gridW || y >= S.gridH || y < 0) continue;
       const cell = S.grid[y][x];
       if (cell.type === B.CONVEYOR && cell.item) {
         drawItem(ctx, cell, x, y);
@@ -1368,115 +1442,169 @@ function render(time) {
   // Draw golden ore
   drawGoldenOre(ctx);
 
-  // Hover highlight
+  // Hover highlight (isometric diamond)
   if (hoveredCell && inBounds(hoveredCell.x, hoveredCell.y)) {
-    const hx = hoveredCell.x * C;
-    const hy = hoveredCell.y * C;
-
+    const p = gridToIso(hoveredCell.x, hoveredCell.y);
     if (S.selectedTool !== null && S.activeTool === 'select') {
-      // Placement preview
       const canDo = canPlace(hoveredCell.x, hoveredCell.y, S.selectedTool);
-      ctx.strokeStyle = canDo ? 'rgba(90,173,110,0.6)' : 'rgba(192,72,72,0.6)';
+      ctx.strokeStyle = canDo ? 'rgba(90,173,110,0.7)' : 'rgba(192,72,72,0.7)';
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(hx + 1, hy + 1, C - 2, C - 2);
+      drawIsoDiamond(ctx, p.sx, p.sy);
       ctx.setLineDash([]);
 
       // Show direction preview for conveyors
       if (BLDG[S.selectedTool] && BLDG[S.selectedTool].directional) {
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.font = 'bold 22px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = 'bold 18px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(DIR_ARROWS[S.convDir], hx + C / 2, hy + C / 2);
+        ctx.fillText(DIR_ARROWS[S.convDir], p.sx, p.sy + hh);
       }
     } else if (S.activeTool === 'demolish') {
       ctx.strokeStyle = 'rgba(192,72,72,0.7)';
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(hx + 1, hy + 1, C - 2, C - 2);
+      drawIsoDiamond(ctx, p.sx, p.sy);
       ctx.setLineDash([]);
     } else {
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(hx + 0.5, hy + 0.5, C - 1, C - 1);
+      drawIsoDiamond(ctx, p.sx, p.sy);
     }
   }
 
-  // Selection highlight
+  // Selection highlight (isometric diamond)
   if (S.selectedCell) {
-    const sx = S.selectedCell.x * C;
-    const sy = S.selectedCell.y * C;
-    ctx.strokeStyle = 'rgba(201,168,76,0.7)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx + 1, sy + 1, C - 2, C - 2);
-
-    // Corner accents
-    const corner = 8;
+    const p = gridToIso(S.selectedCell.x, S.selectedCell.y);
     ctx.strokeStyle = '#c9a84c';
     ctx.lineWidth = 2;
-    // Top-left
-    ctx.beginPath(); ctx.moveTo(sx + 1, sy + corner); ctx.lineTo(sx + 1, sy + 1); ctx.lineTo(sx + corner, sy + 1); ctx.stroke();
-    // Top-right
-    ctx.beginPath(); ctx.moveTo(sx + C - corner, sy + 1); ctx.lineTo(sx + C - 1, sy + 1); ctx.lineTo(sx + C - 1, sy + corner); ctx.stroke();
-    // Bottom-left
-    ctx.beginPath(); ctx.moveTo(sx + 1, sy + C - corner); ctx.lineTo(sx + 1, sy + C - 1); ctx.lineTo(sx + corner, sy + C - 1); ctx.stroke();
-    // Bottom-right
-    ctx.beginPath(); ctx.moveTo(sx + C - corner, sy + C - 1); ctx.lineTo(sx + C - 1, sy + C - 1); ctx.lineTo(sx + C - 1, sy + C - corner); ctx.stroke();
+    drawIsoDiamond(ctx, p.sx, p.sy);
+    // Glow effect
+    ctx.strokeStyle = 'rgba(201,168,76,0.35)';
+    ctx.lineWidth = 4;
+    drawIsoDiamond(ctx, p.sx, p.sy);
   }
 }
 
+// Helper: stroke an isometric diamond at iso-screen top (sx, sy)
+function drawIsoDiamond(ctx, sx, sy) {
+  const hw = CFG.ISO_TW / 2;
+  const hh = CFG.ISO_TH / 2;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx + hw, sy + hh);
+  ctx.lineTo(sx, sy + CFG.ISO_TH);
+  ctx.lineTo(sx - hw, sy + hh);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+// Helper: lighter/darker color
+function lightenColor(hex, amt) {
+  let r = parseInt(hex.slice(1, 3), 16);
+  let g = parseInt(hex.slice(3, 5), 16);
+  let b = parseInt(hex.slice(5, 7), 16);
+  r = Math.min(255, r + amt);
+  g = Math.min(255, g + amt);
+  b = Math.min(255, b + amt);
+  return `rgb(${r},${g},${b})`;
+}
+function darkenColor(hex, amt) {
+  let r = parseInt(hex.slice(1, 3), 16);
+  let g = parseInt(hex.slice(3, 5), 16);
+  let b = parseInt(hex.slice(5, 7), 16);
+  r = Math.max(0, r - amt);
+  g = Math.max(0, g - amt);
+  b = Math.max(0, b - amt);
+  return `rgb(${r},${g},${b})`;
+}
+
 function drawBuilding(ctx, cell, gx, gy, time) {
-  const C = CFG.CELL;
-  const px = gx * C;
-  const py = gy * C;
+  const tw = CFG.ISO_TW;
+  const th = CFG.ISO_TH;
+  const hw = tw / 2;
+  const hh = th / 2;
   const def = BLDG[cell.type];
   if (!def) return;
 
-  const m = 2; // margin
-  const w = C - m * 2;
-  
-  // Flat check: Conveyors and Roads are rendered flat on the ground
+  const p = gridToIso(gx, gy);
+  const sx = p.sx;
+  const sy = p.sy;
+
   const isFlat = cell.type === B.CONVEYOR || cell.type === B.ROAD;
-  const depth = isFlat ? 0 : 5; // 5px 3D extrusion depth
-  const h = C - m * 2 - depth;
+  const lift = isFlat ? 0 : CFG.ISO_LIFT;
 
-  // Drop Shadow
-  if (!isFlat) {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(px + m + 2, py + m + depth, w, h);
+  if (isFlat) {
+    // Draw flat diamond on ground
+    ctx.fillStyle = def.colors.top;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + hw, sy + hh);
+    ctx.lineTo(sx, sy + th);
+    ctx.lineTo(sx - hw, sy + hh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = def.colors.border;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  } else {
+    // ── 3D Extruded Prism ──
+    // Top face (lighter)
+    ctx.fillStyle = lightenColor(def.colors.top, 20);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - lift);
+    ctx.lineTo(sx + hw, sy + hh - lift);
+    ctx.lineTo(sx, sy + th - lift);
+    ctx.lineTo(sx - hw, sy + hh - lift);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = def.colors.border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Left face (darker)
+    ctx.fillStyle = darkenColor(def.colors.base, 10);
+    ctx.beginPath();
+    ctx.moveTo(sx - hw, sy + hh - lift);
+    ctx.lineTo(sx, sy + th - lift);
+    ctx.lineTo(sx, sy + th);
+    ctx.lineTo(sx - hw, sy + hh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // Right face (darkest)
+    ctx.fillStyle = darkenColor(def.colors.base, 25);
+    ctx.beginPath();
+    ctx.moveTo(sx + hw, sy + hh - lift);
+    ctx.lineTo(sx, sy + th - lift);
+    ctx.lineTo(sx, sy + th);
+    ctx.lineTo(sx + hw, sy + hh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
   }
 
-  // 3D Front Wall (extrusion)
-  if (!isFlat) {
-    ctx.fillStyle = def.colors.base;
-    ctx.fillRect(px + m, py + m + h, w, depth);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; // Dark shading overlay
-    ctx.fillRect(px + m, py + m + h, w, depth);
-  }
-
-  // Top Face Base
-  const grad = ctx.createLinearGradient(px + m, py + m, px + m, py + m + h);
-  grad.addColorStop(0, def.colors.top);
-  grad.addColorStop(1, def.colors.base);
-  ctx.fillStyle = grad;
-  ctx.fillRect(px + m, py + m, w, h);
-
-  // Top Face Border
-  ctx.strokeStyle = def.colors.border;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(px + m + 0.5, py + m + 0.5, w - 1, h - 1);
-
-  // Glow for active buildings (renders on the top face)
-  if (cell.type === B.SMELTER || cell.type === B.STEEL_MILL || cell.type === B.REFINERY) {
-    if (cell.processing) {
-      const pulse = 0.4 + Math.sin(time * 4) * 0.2;
-      ctx.shadowColor = def.colors.border;
-      ctx.shadowBlur = 12 * pulse;
-      ctx.strokeStyle = def.colors.border;
-      ctx.strokeRect(px + m + 0.5, py + m + 0.5, w - 1, h - 1);
-      ctx.shadowBlur = 0;
-    }
+  // Glow for active buildings
+  if ((cell.type === B.SMELTER || cell.type === B.STEEL_MILL || cell.type === B.REFINERY) && cell.processing) {
+    const pulse = 0.4 + Math.sin(time * 4) * 0.2;
+    ctx.strokeStyle = def.colors.border;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = def.colors.border;
+    ctx.shadowBlur = 12 * pulse;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - lift);
+    ctx.lineTo(sx + hw, sy + hh - lift);
+    ctx.lineTo(sx, sy + th - lift);
+    ctx.lineTo(sx - hw, sy + hh - lift);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
   }
 
   if (cell.type === B.COLLECTOR) {
@@ -1484,160 +1612,139 @@ function drawBuilding(ctx, cell, gx, gy, time) {
     ctx.shadowColor = '#f0d060';
     ctx.shadowBlur = 8 * pulse;
     ctx.strokeStyle = 'rgba(240,208,96,0.4)';
-    ctx.strokeRect(px + m + 0.5, py + m + 0.5, w - 1, h - 1);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - lift);
+    ctx.lineTo(sx + hw, sy + hh - lift);
+    ctx.lineTo(sx, sy + th - lift);
+    ctx.lineTo(sx - hw, sy + hh - lift);
+    ctx.closePath();
+    ctx.stroke();
     ctx.shadowBlur = 0;
   }
 
-  // Translate context upwards to center inner contents on the 3D top face!
-  if (!isFlat) {
-    ctx.translate(0, -depth / 2);
-  }
+  // Draw type-specific content on top face center
+  const cx = sx;
+  const cy = sy + hh - lift;
 
-  // Draw type-specific content
   if (cell.type === B.CONVEYOR) {
-    drawConveyorBelt(ctx, cell, px, py, C, time);
+    drawConveyorBelt(ctx, cell, sx, sy, time);
   } else if (cell.type === B.ORE_MINE) {
-    drawMineContent(ctx, cell, px, py, C, time);
+    drawMineContent(ctx, cell, cx, cy, time);
   } else if (cell.type === B.SMELTER || cell.type === B.STEEL_MILL || cell.type === B.REFINERY) {
-    drawProcessorContent(ctx, cell, px, py, C, time);
+    drawProcessorContent(ctx, cell, cx, cy, time, def);
   } else if (cell.type === B.STORAGE) {
-    drawStorageContent(ctx, cell, px, py, C);
+    drawStorageContent(ctx, cell, cx, cy);
   } else if (cell.type === B.RESEARCH_LAB) {
-    drawResearchLabContent(ctx, cell, px, py, C, gx, gy);
+    drawResearchLabContent(ctx, cell, cx, cy, gx, gy);
   } else {
-    // Generic: draw icon
+    // Generic icon on top face
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = `${C * 0.4}px sans-serif`;
+    ctx.font = `${18}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(def.icon, px + C / 2, py + C / 2);
+    ctx.fillText(def.icon, cx, cy);
   }
 
   // Level badge
   if (cell.level > 1) {
-    const bx = px + C - 14;
-    const by = py + 4;
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    const bx = sx + hw * 0.4;
+    const by = sy - lift - 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.beginPath();
-    ctx.arc(bx + 5, by + 5, 7, 0, Math.PI * 2);
+    ctx.arc(bx, by, 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#c9a84c';
     ctx.font = 'bold 9px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cell.level, bx + 5, by + 5);
-  }
-
-  // Restore translation
-  if (!isFlat) {
-    ctx.translate(0, depth / 2);
+    ctx.fillText(cell.level, bx, by);
   }
 }
 
-function drawConveyorBelt(ctx, cell, px, py, C, time) {
-  const m = 6;
+function drawConveyorBelt(ctx, cell, sx, sy, time) {
+  const hw = CFG.ISO_TW / 2;
+  const hh = CFG.ISO_TH / 2;
   const dir = cell.dir;
   const speed = BLDG[B.CONVEYOR].stats(cell.level).speed;
-
-  // Belt track
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  if (dir === DIR.RIGHT || dir === DIR.LEFT) {
-    ctx.fillRect(px + m, py + C * 0.35, C - m * 2, C * 0.3);
-  } else {
-    ctx.fillRect(px + C * 0.35, py + m, C * 0.3, C - m * 2);
-  }
-
-  // Animated dashes
-  const dashLen = 6;
-  const gap = 8;
-  const offset = ((time * speed * 30) % (dashLen + gap));
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 1;
-
-  if (dir === DIR.RIGHT || dir === DIR.LEFT) {
-    const sign = dir === DIR.RIGHT ? 1 : -1;
-    const startX = dir === DIR.RIGHT ? px + m - offset : px + C - m + offset;
-    for (let i = -1; i < C / (dashLen + gap) + 1; i++) {
-      const dx = startX + i * (dashLen + gap) * sign;
-      ctx.beginPath();
-      ctx.moveTo(dx, py + C / 2);
-      ctx.lineTo(dx + dashLen * sign, py + C / 2);
-      ctx.stroke();
-    }
-  } else {
-    const sign = dir === DIR.DOWN ? 1 : -1;
-    const startY = dir === DIR.DOWN ? py + m - offset : py + C - m + offset;
-    for (let i = -1; i < C / (dashLen + gap) + 1; i++) {
-      const dy = startY + i * (dashLen + gap) * sign;
-      ctx.beginPath();
-      ctx.moveTo(px + C / 2, dy);
-      ctx.lineTo(px + C / 2, dy + dashLen * sign);
-      ctx.stroke();
-    }
-  }
+  const cx = sx;
+  const cy = sy + hh;
 
   // Direction arrow
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
-  ctx.font = 'bold 16px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = 'bold 14px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(DIR_ARROWS[dir], px + C / 2, py + C / 2);
+  ctx.fillText(DIR_ARROWS[dir], cx, cy);
+
+  // Animated dash along direction
+  const dashSpacing = 10;
+  const offset = ((time * speed * 30) % dashSpacing);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  const dotCount = 3;
+  for (let i = -1; i < dotCount; i++) {
+    const t = ((i * dashSpacing + offset) / (dotCount * dashSpacing)) - 0.2;
+    const dx2 = DX[dir] * t * hw * 0.8;
+    const dy2 = DY[dir] * t * hh * 0.8;
+    // Convert direction vector to iso-space offset
+    const isoX = (DX[dir] - DY[dir]) * t * hw * 0.4;
+    const isoY = (DX[dir] + DY[dir]) * t * hh * 0.4;
+    ctx.beginPath();
+    ctx.arc(cx + isoX, cy + isoY, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
-function drawMineContent(ctx, cell, px, py, C, time) {
+function drawMineContent(ctx, cell, cx, cy, time) {
   // Mine icon
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.font = `${C * 0.38}px sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('⛏', px + C / 2, py + C / 2 - 4);
+  ctx.fillText('⛏', cx, cy - 3);
 
   // Buffer indicator
   if (cell.buffer > 0) {
-    for (let i = 0; i < cell.buffer; i++) {
+    for (let i = 0; i < Math.min(cell.buffer, 3); i++) {
       ctx.fillStyle = '#8b6914';
       ctx.beginPath();
-      ctx.arc(px + 10 + i * 8, py + C - 10, 3, 0, Math.PI * 2);
+      ctx.arc(cx - 8 + i * 8, cy + 8, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // Production progress bar
+  // Production progress bar (small line under icon)
   const stats = BLDG[B.ORE_MINE].stats(cell.level);
   const interval = stats.prodInterval;
   const prog = clamp(cell.prodTimer / interval, 0, 1);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(px + 4, py + C - 6, C - 8, 3);
+  const barW = 24;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(cx - barW / 2, cy + 10, barW, 2);
   ctx.fillStyle = '#8b6914';
-  ctx.fillRect(px + 4, py + C - 6, (C - 8) * prog, 3);
+  ctx.fillRect(cx - barW / 2, cy + 10, barW * prog, 2);
 }
 
-function drawProcessorContent(ctx, cell, px, py, C, time) {
-  const def = BLDG[cell.type];
-
+function drawProcessorContent(ctx, cell, cx, cy, time, def) {
   // Icon
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.font = `${C * 0.38}px sans-serif`;
+  ctx.font = '16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(def.icon, px + C / 2, py + C / 2 - 4);
+  ctx.fillText(def.icon, cx, cy - 3);
 
   // Processing progress
   if (cell.processing) {
     const stats = def.stats(cell.level);
     const prog = clamp(cell.processTimer / stats.processTime, 0, 1);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(px + 4, py + C - 6, C - 8, 3);
+    const barW = 24;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(cx - barW / 2, cy + 10, barW, 2);
     ctx.fillStyle = def.colors.border;
-    ctx.fillRect(px + 4, py + C - 6, (C - 8) * prog, 3);
+    ctx.fillRect(cx - barW / 2, cy + 10, barW * prog, 2);
 
     // Fire particles
     if (Math.random() < 0.15) {
-      spawnParticles(
-        px + C / 2 + (Math.random() - 0.5) * 10,
-        py + C * 0.3,
-        def.colors.border, 1
-      );
+      spawnParticles(cx + (Math.random() - 0.5) * 10, cy - 8, def.colors.border, 1);
     }
   }
 
@@ -1646,96 +1753,113 @@ function drawProcessorContent(ctx, cell, px, py, C, time) {
     ctx.fillStyle = cell.type === B.REFINERY ? '#0088ff' : '#aaa';
     for (let i = 0; i < Math.min(cell.outputBuffer, 3); i++) {
       ctx.beginPath();
-      ctx.arc(px + 10 + i * 8, py + 10, 3, 0, Math.PI * 2);
+      ctx.arc(cx - 6 + i * 6, cy - 10, 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 }
 
-function drawStorageContent(ctx, cell, px, py, C) {
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.font = `${C * 0.3}px sans-serif`;
+function drawStorageContent(ctx, cell, cx, cy) {
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '14px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('📦', px + C / 2, py + C / 2 - 6);
+  ctx.fillText('📦', cx, cy - 4);
 
   // Count
   const cap = BLDG[B.STORAGE].stats(cell.level).capacity;
   ctx.fillStyle = cell.stored >= cap ? '#c04848' : 'rgba(255,255,255,0.5)';
-  ctx.font = 'bold 10px Inter, sans-serif';
-  ctx.fillText(`${cell.stored}/${cap}`, px + C / 2, py + C - 10);
+  ctx.font = 'bold 8px Inter, sans-serif';
+  ctx.fillText(`${cell.stored}/${cap}`, cx, cy + 8);
 }
 
-function drawResearchLabContent(ctx, cell, px, py, C, gx, gy) {
+function drawResearchLabContent(ctx, cell, cx, cy, gx, gy) {
   // Icon
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.font = `${C * 0.38}px sans-serif`;
+  ctx.font = '16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('🔬', px + C / 2, py + C / 2 - 4);
+  ctx.fillText('🔬', cx, cy - 3);
 
   // Progress Bar
   const stats = BLDG[B.RESEARCH_LAB].stats(cell.level);
   const interval = stats.rpInterval / getPowerBoost(gx, gy);
   const prog = clamp(cell.prodTimer / interval, 0, 1);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(px + 4, py + C - 6, C - 8, 3);
+  const barW = 24;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(cx - barW / 2, cy + 10, barW, 2);
   ctx.fillStyle = '#10b981';
-  ctx.fillRect(px + 4, py + C - 6, (C - 8) * prog, 3);
+  ctx.fillRect(cx - barW / 2, cy + 10, barW * prog, 2);
 
-  // Little particles occasionally
+  // Particles occasionally
   if (Math.random() < 0.05) {
-    spawnParticles(
-      px + C / 2 + (Math.random() - 0.5) * 8,
-      py + C / 2 + (Math.random() - 0.5) * 8,
-      '#10b981', 1
-    );
+    spawnParticles(cx + (Math.random() - 0.5) * 8, cy + (Math.random() - 0.5) * 8, '#10b981', 1);
   }
 }
 
 function drawItem(ctx, cell, gx, gy) {
-  const C = CFG.CELL;
+  const hw = CFG.ISO_TW / 2;
+  const hh = CFG.ISO_TH / 2;
   const prog = clamp(cell.itemProgress, 0, 1);
   const dir = cell.dir;
 
-  // Calculate position
-  const ix = (gx + 0.5 + DX[dir] * (prog - 0.5)) * C;
-  const iy = (gy + 0.5 + DY[dir] * (prog - 0.5)) * C;
+  // Fractional grid position: center of cell + progress along direction
+  const fx = gx + 0.5 + DX[dir] * (prog - 0.5);
+  const fy = gy + 0.5 + DY[dir] * (prog - 0.5);
+
+  // Convert to iso screen coords
+  const isoP = gridToIso(fx, fy);
+  const ix = isoP.sx;
+  const iy = isoP.sy;
 
   // Item appearance
   let color, glowColor, size;
   switch (cell.item) {
     case 'ore':
       color = '#8b6914';
-      glowColor = 'rgba(139,105,20,0.4)';
-      size = 5;
+      glowColor = 'rgba(139,105,20,0.5)';
+      size = 4;
       break;
     case 'steel':
       color = '#9aa0b0';
-      glowColor = 'rgba(154,160,176,0.4)';
-      size = 5;
+      glowColor = 'rgba(154,160,176,0.5)';
+      size = 4;
       break;
     case 'product':
       color = '#4a7acc';
-      glowColor = 'rgba(74,122,204,0.4)';
-      size = 6;
+      glowColor = 'rgba(74,122,204,0.5)';
+      size = 5;
       break;
     default:
       color = '#888';
       glowColor = 'rgba(136,136,136,0.3)';
-      size = 4;
+      size = 3;
   }
 
+  // Draw as small 3D diamond
   ctx.shadowColor = glowColor;
-  ctx.shadowBlur = 6;
+  ctx.shadowBlur = 5;
   ctx.fillStyle = color;
-  ctx.fillRect(ix - size, iy - size, size * 2, size * 2);
+  ctx.beginPath();
+  ctx.moveTo(ix, iy - size);
+  ctx.lineTo(ix + size, iy);
+  ctx.lineTo(ix, iy + size * 0.6);
+  ctx.lineTo(ix - size, iy);
+  ctx.closePath();
+  ctx.fill();
   ctx.shadowBlur = 0;
 
   // Highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.fillRect(ix - size + 1, iy - size + 1, size * 2 - 2, size - 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.moveTo(ix, iy - size);
+  ctx.lineTo(ix + size * 0.5, iy - size * 0.2);
+  ctx.lineTo(ix, iy);
+  ctx.lineTo(ix - size * 0.5, iy - size * 0.2);
+  ctx.closePath();
+  ctx.fill();
 }
+
 
 // ═══════════════════════════════════════════════════════════════
 //  SECTION 12: UI SYSTEM
@@ -2243,8 +2367,7 @@ function setupInput() {
     const scaleY = canvas.height / rect.height;
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
-    const gx = Math.floor(mx / CFG.CELL);
-    const gy = Math.floor(my / CFG.CELL);
+    const { gx, gy } = isoToGrid(mx, my);
     hoveredCell = inBounds(gx, gy) ? { x: gx, y: gy } : null;
   });
 
