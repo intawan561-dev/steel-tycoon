@@ -27,9 +27,9 @@ const CFG = {
 
 // ── Isometric coordinate helpers ──
 function isoOrigin() {
-  // Origin is the top-center of the diamond grid
+  // Origin is the top-center of the diamond grid, adjusted so the entire grid is horizontally centered
   return {
-    ox: (S.gridW + S.gridH) * CFG.ISO_TW / 2 / 2 + 20,
+    ox: canvas.width / 2 - (S.gridW - S.gridH) * (CFG.ISO_TW / 4),
     oy: 40 + CFG.ISO_LIFT
   };
 }
