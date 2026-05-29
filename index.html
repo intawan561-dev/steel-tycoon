@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Steel Tycoon — สร้างอาณาจักรอุตสาหกรรมของคุณตั้งแต่โรงงานเหล็กขนาดเล็กไปจนถึงเมืองอุตสาหกรรมขนาดใหญ่">
+  <title>Steel Tycoon — เกมสร้างอาณาจักรอุตสาหกรรม</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Kanit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ═══════ TOP DASHBOARD ═══════ -->
+    <header id="dashboard">
+      <div class="dash-brand">
+        <span class="brand-icon">⚙</span>
+        <h1 class="brand-title">STEEL TYCOON</h1>
+      </div>
+      <div class="dash-stats">
+        <div class="stat-card gold-glow">
+          <div class="stat-icon">💵</div>
+          <div class="stat-info">
+            <span class="stat-label">เงินสด</span>
+            <span class="stat-value mono" id="cash-value">$600</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📈</div>
+          <div class="stat-info">
+            <span class="stat-label">รายได้ / วินาที</span>
+            <span class="stat-value mono" id="income-value">$0</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🔩</div>
+          <div class="stat-info">
+            <span class="stat-label">ผลิตสินค้าแล้ว</span>
+            <span class="stat-value mono" id="produced-value">0</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🏭</div>
+          <div class="stat-info">
+            <span class="stat-label">ระดับโรงงาน</span>
+            <span class="stat-value" id="stage-value">โรงงานผลิตเหล็ก</span>
+          </div>
+        </div>
+      </div>
+      <div class="dash-controls">
+        <button class="ctrl-btn" id="btn-save" title="บันทึกเกม (Ctrl+S)">💾</button>
+        <button class="ctrl-btn" id="btn-load" title="โหลดเกม">📂</button>
+        <button class="ctrl-btn" id="btn-speed" title="ปรับความเร็ว (Space)">▶ 1×</button>
+        <button class="ctrl-btn ctrl-btn--danger" id="btn-reset" title="รีเซ็ตเกม">🔄 รีเซ็ต</button>
+      </div>
+    </header>
+
+    <!-- ═══════ MAIN CONTENT ═══════ -->
+    <main id="main-area">
+      <!-- Canvas Area -->
+      <section id="canvas-section">
+        <div id="canvas-container">
+          <canvas id="game-canvas"></canvas>
+        </div>
+        <div id="canvas-toolbar">
+          <button class="tool-btn active" data-tool="select" title="เลือก / วาง (S)">🔍 เลือก / วาง</button>
+          <button class="tool-btn" data-tool="demolish" title="ทำลาย (X)">🗑️ ทำลาย</button>
+          <span class="toolbar-sep"></span>
+          <span class="toolbar-hint" id="toolbar-hint">เลือกสิ่งก่อสร้างจากแผงเมนูเพื่อวางบนแผนที่</span>
+        </div>
+      </section>
+
+      <!-- Side Panel -->
+      <aside id="panel">
+        <nav class="panel-tabs">
+          <button class="ptab active" data-tab="build">🔨 สร้าง</button>
+          <button class="ptab" data-tab="upgrade">⬆️ อัปเกรด</button>
+          <button class="ptab" data-tab="expand">🗺️ ขยายพื้นที่</button>
+          <button class="ptab" data-tab="codex">📚 สารานุกรม</button>
+          <button class="ptab" data-tab="research">🔬 วิจัย</button>
+        </nav>
+        <div class="panel-body" id="panel-body">
+          <!-- BUILD TAB -->
+          <div id="tab-build" class="tab-pane active"></div>
+          <!-- UPGRADE TAB -->
+          <div id="tab-upgrade" class="tab-pane">
+            <div class="empty-state" id="upgrade-empty">
+              <span class="empty-icon">🔧</span>
+              <p>คลิกสิ่งก่อสร้างบนแผนที่เพื่อดูตัวเลือกการอัปเกรด</p>
+            </div>
+            <div id="upgrade-content" class="hidden"></div>
+          </div>
+          <!-- EXPAND TAB -->
+          <div id="tab-expand" class="tab-pane"></div>
+          <!-- CODEX TAB -->
+          <div id="tab-codex" class="tab-pane">
+            <div class="codex-toggle">
+              <button class="ctoggle active" id="toggle-codex-items">📦 ไอเทม</button>
+              <button class="ctoggle" id="toggle-codex-buildings">🏢 สิ่งก่อสร้าง</button>
+            </div>
+            <div id="codex-list"></div>
+          </div>
+          <!-- RESEARCH TAB -->
+          <div id="tab-research" class="tab-pane">
+            <div class="stat-card" style="margin-bottom: 12px; border-color: rgba(16,185,129,0.3); box-shadow: 0 0 16px rgba(16,185,129,0.1);">
+              <div class="stat-icon">🔬</div>
+              <div class="stat-info">
+                <span class="stat-label" style="color: #10b981;">คะแนนวิจัย (RP)</span>
+                <span class="stat-value mono" id="rp-value" style="color: #10b981;">0</span>
+              </div>
+            </div>
+            <div id="research-list"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- ═══════ FLOATING NOTIFICATIONS ═══════ -->
+    <div id="notifs"></div>
+
+    <!-- ═══════ WELCOME MODAL ═══════ -->
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-glow"></div>
+        <div class="modal-header">
+          <div class="modal-logo">⚙</div>
+          <h2>Steel Tycoon</h2>
+          <p class="modal-sub">เกมสร้างอาณาจักรอุตสาหกรรม</p>
+        </div>
+        <div class="modal-body">
+          <div class="tut-steps">
+            <div class="tut-step">
+              <span class="tut-num">1</span>
+              <div><strong>สร้างเหมืองแร่ (Ore Mine)</strong> — ขุดวัตถุดิบและแร่เหล็กดิบจากใต้พื้นดิน</div>
+            </div>
+            <div class="tut-step">
+              <span class="tut-num">2</span>
+              <div><strong>วางสายพาน (Conveyor)</strong> — ขนส่งแร่และสินค้าต่างๆ ระหว่างสิ่งก่อสร้าง <em>(คลิกขวาเพื่อหมุนทิศทาง)</em></div>
+            </div>
+            <div class="tut-step">
+              <span class="tut-num">3</span>
+              <div><strong>สร้างเตาหลอม (Smelter)</strong> — แปรรูปแร่เหล็กดิบให้กลายเป็นเหล็กแท่ง (Steel Ingot)</div>
+            </div>
+            <div class="tut-step">
+              <span class="tut-num">4</span>
+              <div><strong>เพิ่มจุดเก็บเงิน (Collector)</strong> — ขนเหล็กแท่งหรือสินค้าไปขายเพื่อเปลี่ยนเป็นเงินสด</div>
+            </div>
+            <div class="tut-step">
+              <span class="tut-num">5</span>
+              <div><strong>อัปเกรดและขยายพื้นที่</strong> — พัฒนาโรงงานไปสู่อาณาจักรอุตสาหกรรมขนาดใหญ่ยักษ์!</div>
+            </div>
+          </div>
+          <div class="tut-chain">
+            <span class="chain-node mine">⛏ เหมือง</span>
+            <span class="chain-arrow">→</span>
+            <span class="chain-node conv">⇒ สายพาน</span>
+            <span class="chain-arrow">→</span>
+            <span class="chain-node smelt">🔥 หลอม</span>
+            <span class="chain-arrow">→</span>
+            <span class="chain-node conv">⇒ สายพาน</span>
+            <span class="chain-arrow">→</span>
+            <span class="chain-node collect">💰 เก็บเงิน</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn" id="btn-start">⚙ เริ่มต้นสร้างโรงงาน</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/game.js"></script>
+</body>
+</html>
