@@ -250,7 +250,10 @@ function createState() {
       smelter_speed: 0,
       mine_speed: 0,
       collector_income: 0
-    }
+    },
+    overdriveTimer: 0,
+    goldenOreSpawnTimer: 30,
+    goldenOre: { active: false }
   };
 }
 
@@ -836,6 +839,149 @@ function updateParticles(dt) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  SECTION 10.5: GOLDEN ORE & OVERDRIVE SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+function spawnGoldenOre() {
+  const isOverdrive = Math.random() < 0.4; // 40% chance for overdrive, 60% for cash
+  const type = isOverdrive ? 'overdrive' : 'cash';
+  
+  const side = Math.random() < 0.5 ? 'left' : 'right';
+  const margin = 50;
+  const canvasW = canvas.width;
+  const canvasH = canvas.height;
+  
+  let x, y, vx, vy;
+  if (side === 'left') {
+    x = -20;
+    y = margin + Math.random() * (canvasH - margin * 2);
+    vx = 30 + Math.random() * 30; // 30-60 px/sec
+    vy = (Math.random() - 0.5) * 20; // slow vertical drift
+  } else {
+    x = canvasW + 20;
+    y = margin + Math.random() * (canvasH - margin * 2);
+    vx = -(30 + Math.random() * 30);
+    vy = (Math.random() - 0.5) * 20;
+  }
+  
+  S.goldenOre = {
+    active: true,
+    x: x,
+    y: y,
+    vx: vx,
+    vy: vy,
+    size: 18,
+    type: type,
+    pulse: 0
+  };
+}
+
+function updateGoldenOre(dt) {
+  // Spawn logic
+  if (!S.goldenOre || !S.goldenOre.active) {
+    if (S.goldenOreSpawnTimer === undefined) S.goldenOreSpawnTimer = 45;
+    S.goldenOreSpawnTimer -= dt;
+    if (S.goldenOreSpawnTimer <= 0) {
+      spawnGoldenOre();
+      S.goldenOreSpawnTimer = 45 + Math.random() * 30; // next spawn in 45-75 seconds
+    }
+    return;
+  }
+  
+  const ore = S.goldenOre;
+  ore.x += ore.vx * dt;
+  ore.y += ore.vy * dt;
+  ore.pulse += dt * 5;
+  
+  // Trail particles
+  if (Math.random() < 0.25) {
+    const color = ore.type === 'overdrive' ? '#ff9c1a' : '#fbbf24';
+    spawnParticles(ore.x, ore.y, color, 1);
+  }
+  
+  // Boundary check
+  const canvasW = canvas.width;
+  const canvasH = canvas.height;
+  if (ore.x < -40 || ore.x > canvasW + 40 || ore.y < -40 || ore.y > canvasH + 40) {
+    ore.active = false;
+  }
+}
+
+function collectGoldenOre() {
+  if (!S.goldenOre || !S.goldenOre.active) return;
+  const ore = S.goldenOre;
+  ore.active = false;
+  
+  // Spawn explosion particles
+  const color = ore.type === 'overdrive' ? '#ff9c1a' : '#fbbf24';
+  spawnParticles(ore.x, ore.y, color, 15);
+  
+  if (ore.type === 'overdrive') {
+    // Activate Overdrive
+    S.overdriveTimer = 15.0; // 15 seconds
+    spawnFloatText(ore.x, ore.y - 10, 'เร่งกำลัง OVERDRIVE! ⚡', '#ff9c1a');
+    
+    // Show HUD immediately
+    const hud = document.getElementById('overdrive-hud');
+    if (hud) {
+      hud.classList.remove('hidden');
+    }
+  } else {
+    // Reward cash
+    const baseReward = 150 * (S.stage + 1);
+    const scaleReward = S.incomePerSec * 15; // 15 seconds of income
+    const reward = Math.floor(Math.max(baseReward, scaleReward));
+    
+    S.cash += reward;
+    spawnFloatText(ore.x, ore.y - 10, `+${formatCash(reward)} 🪙`, '#fbbf24');
+    updateUI();
+  }
+}
+
+function drawGoldenOre(ctx) {
+  if (!S.goldenOre || !S.goldenOre.active) return;
+  
+  const ore = S.goldenOre;
+  const size = ore.size;
+  const pulse = Math.sin(ore.pulse) * 3;
+  const totalSize = size + pulse;
+  
+  // Outer glow
+  const grad = ctx.createRadialGradient(ore.x, ore.y, size * 0.2, ore.x, ore.y, totalSize * 1.5);
+  if (ore.type === 'overdrive') {
+    grad.addColorStop(0, '#ff9c1a');
+    grad.addColorStop(0.5, 'rgba(255,156,26,0.3)');
+    grad.addColorStop(1, 'rgba(255,156,26,0)');
+  } else {
+    grad.addColorStop(0, '#fbbf24');
+    grad.addColorStop(0.5, 'rgba(251,191,36,0.3)');
+    grad.addColorStop(1, 'rgba(251,191,36,0)');
+  }
+  
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(ore.x, ore.y, totalSize * 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Inner solid core
+  ctx.fillStyle = ore.type === 'overdrive' ? '#ff9c1a' : '#fbbf24';
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(ore.x, ore.y, size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  
+  // Icon emoji
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `${size * 0.9}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const icon = ore.type === 'overdrive' ? '⚡' : '🪙';
+  ctx.fillText(icon, ore.x, ore.y);
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  SECTION 11: CANVAS RENDERER
 // ═══════════════════════════════════════════════════════════════
 
@@ -924,6 +1070,9 @@ function render(time) {
     ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;
+
+  // Draw golden ore
+  drawGoldenOre(ctx);
 
   // Hover highlight
   if (hoveredCell && inBounds(hoveredCell.x, hoveredCell.y)) {
@@ -1782,6 +1931,23 @@ function setupInput() {
   });
 
   canvas.addEventListener('click', (e) => {
+    if (S.goldenOre && S.goldenOre.active) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      
+      const dx = mx - S.goldenOre.x;
+      const dy = my - S.goldenOre.y;
+      const distVal = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distVal <= S.goldenOre.size + 12) {
+        collectGoldenOre();
+        return;
+      }
+    }
+
     if (!hoveredCell) return;
     const { x, y } = hoveredCell;
 
@@ -1959,6 +2125,7 @@ function saveGame() {
     buildCounts: S.buildCounts,
     rp: S.rp,
     research: S.research,
+    overdriveTimer: S.overdriveTimer,
     grid: S.grid.map(row => row.map(cell => ({
       t: cell.type,
       l: cell.level,
@@ -2007,6 +2174,7 @@ function loadGame() {
       mine_speed: 0,
       collector_income: 0
     };
+    S.overdriveTimer = data.overdriveTimer || 0;
 
     S.grid = createGrid(S.gridW, S.gridH);
     if (data.grid) {
@@ -2062,7 +2230,33 @@ function gameLoop(timestamp) {
   // Cap delta to prevent spiral
   rawDt = Math.min(rawDt, 0.1);
 
-  const dt = rawDt * S.speed;
+  // Update overdrive timer (real-time seconds, not sped up)
+  if (S.overdriveTimer > 0) {
+    S.overdriveTimer = Math.max(0, S.overdriveTimer - rawDt);
+    
+    // Update overdrive HUD
+    const hud = document.getElementById('overdrive-hud');
+    if (hud) {
+      hud.classList.remove('hidden');
+      const timeVal = document.getElementById('overdrive-time-val');
+      if (timeVal) {
+        timeVal.textContent = S.overdriveTimer.toFixed(1);
+      }
+      const progress = document.getElementById('overdrive-progress');
+      if (progress) {
+        const pct = (S.overdriveTimer / 15.0) * 100;
+        progress.style.width = `${pct}%`;
+      }
+    }
+  } else {
+    const hud = document.getElementById('overdrive-hud');
+    if (hud && !hud.classList.contains('hidden')) {
+      hud.classList.add('hidden');
+    }
+  }
+
+  const speedMult = (S.overdriveTimer > 0) ? 2.0 : 1.0;
+  const dt = rawDt * S.speed * speedMult;
   const time = timestamp / 1000;
 
   S.gameTime += dt;
@@ -2073,6 +2267,7 @@ function gameLoop(timestamp) {
   updateConveyors(dt);
   updateStorage(dt);
   updateResearchLabs(dt);
+  updateGoldenOre(rawDt); // Update golden ore position in real-time, not sped up by overdrive
   updateParticles(dt);
   updateIncomeRate();
 
@@ -2125,6 +2320,7 @@ function saveGameSilent() {
     buildCounts: S.buildCounts,
     rp: S.rp,
     research: S.research,
+    overdriveTimer: S.overdriveTimer,
     grid: S.grid.map(row => row.map(cell => ({
       t: cell.type, l: cell.level, d: cell.dir,
       pt: cell.prodTimer, bu: cell.buffer,

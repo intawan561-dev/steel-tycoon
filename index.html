@@ -60,6 +60,15 @@
     <main id="main-area">
       <!-- Canvas Area -->
       <section id="canvas-section">
+        <!-- Overdrive HUD -->
+        <div id="overdrive-hud" class="overdrive-hud hidden">
+          <span class="hud-icon">⚡</span>
+          <span class="hud-text">เร่งกำลัง (Overdrive): <span id="overdrive-time-val">15.0</span>s (×2 ความเร็ว)</span>
+          <div class="hud-progress-bar">
+            <div id="overdrive-progress" class="hud-progress-fill"></div>
+          </div>
+        </div>
+
         <div id="canvas-container">
           <canvas id="game-canvas"></canvas>
         </div>
