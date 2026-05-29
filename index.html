@@ -177,6 +177,29 @@
         </div>
       </div>
     </div>
+
+    <!-- ═══════ LUCKY WHEEL MODAL ═══════ -->
+    <div id="modal-wheel" class="modal-overlay hidden">
+      <div class="modal modal-wheel-content" style="max-width: 320px;">
+        <button class="modal-close" id="btn-close-wheel">&times;</button>
+        <h2 style="color: #ff9c1a; text-align: center; margin-bottom: 8px; font-family: Kanit, sans-serif;">🎡 วงล้อเสี่ยงโชคอุตสาหกรรม</h2>
+        <p style="font-size: 11px; color: var(--text-secondary); text-align: center; margin-bottom: 16px; font-family: Kanit, sans-serif;">
+          โชคดี 1 ช่องชนะรางวัลใหญ่ (เงิน + RP) <br>
+          โชคร้าย 6 ช่องที่เหลือจะถูกหักเงินและสุ่มระเบิดเครื่องจักรของคุณ!
+        </p>
+        
+        <div class="wheel-container" style="position: relative; width: 260px; height: 260px; margin: 0 auto 20px;">
+          <div class="wheel-pointer" style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); z-index: 10; font-size: 24px; color: #ef4444; text-shadow: 0 0 8px rgba(0,0,0,0.6);">▼</div>
+          <canvas id="wheel-canvas" width="260" height="260" style="transition: transform 4s cubic-bezier(0.1, 0.8, 0.1, 1); border-radius: 50%; box-shadow: 0 0 20px rgba(0,0,0,0.7);"></canvas>
+        </div>
+        
+        <div class="wheel-action" style="text-align: center;">
+          <button class="btn-primary" id="btn-spin-wheel" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 700; background: linear-gradient(135deg, #ff9c1a, #ea580c); border-color: #ffaa00; text-shadow: 0 1px 2px rgba(0,0,0,0.5); cursor: pointer;">หมุนวงล้อเสี่ยงโชค (<span id="spin-cost-val">$200</span>)</button>
+        </div>
+        
+        <div id="wheel-result-msg" class="wheel-result-msg" style="text-align: center; margin-top: 14px; min-height: 24px; font-family: Kanit, sans-serif; font-size: 13px; font-weight: bold;"></div>
+      </div>
+    </div>
   </div>
 
   <script src="js/game.js"></script>

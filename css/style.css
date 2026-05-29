@@ -1368,3 +1368,37 @@ html, body {
   transition: width 0.1s linear;
 }
 
+/* ═══════ LUCKY WHEEL MODAL ═══════ */
+.modal-wheel-content {
+  border: 1px solid rgba(255, 156, 26, 0.3);
+  box-shadow: 0 0 30px rgba(255, 156, 26, 0.15), 0 10px 40px rgba(0, 0, 0, 0.7);
+  background: linear-gradient(180deg, #10121a 0%, #08090d 100%) !important;
+}
+
+.wheel-result-msg {
+  transition: all 0.3s ease;
+}
+
+.wheel-result-msg.win {
+  color: #10b981;
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  animation: bounce 0.5s ease infinite alternate;
+}
+
+.wheel-result-msg.lose {
+  color: #ef4444;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  animation: shake 0.4s ease;
+}
+
+@keyframes bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-4px); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+

@@ -36,6 +36,7 @@ const B = {
   REFINERY:   10,
   TRADE_CENTER:11,
   RESEARCH_LAB:12,
+  LUCKY_WHEEL: 13,
 };
 
 // Direction IDs
@@ -156,6 +157,14 @@ const BLDG = {
     unlockStage: 1, maxLevel: 3,
     stats: lv => ({ rpInterval: [5, 3.5, 2.0][lv-1] }),
     statLabels: { rpInterval: 'เวลาผลิตวิจัย (วินาที)' },
+  },
+  [B.LUCKY_WHEEL]: {
+    name: 'วงล้อเสี่ยงโชค', icon: '🎡', category: 'infrastructure',
+    desc: 'วงล้อเสี่ยงโชคอุตสาหกรรม: 1 ช่องชนะรางวัลใหญ่ (เงิน + RP), อีก 6 ช่องบทลงโทษหักเงินและทำลายเครื่องจักร!',
+    baseCost: 500, costScale: 1.0,
+    colors: { base: '#3b2f11', top: '#524116', border: '#ffaa00', glow: 'rgba(255,170,0,0.25)' },
+    unlockStage: 1, maxLevel: 1,
+    stats: () => ({}), statLabels: {},
   },
 };
 
@@ -979,6 +988,291 @@ function drawGoldenOre(ctx) {
   ctx.textBaseline = 'middle';
   const icon = ore.type === 'overdrive' ? '⚡' : '🪙';
   ctx.fillText(icon, ore.x, ore.y);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 10.6: INDUSTRIAL LUCKY WHEEL & CASINO SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+let isSpinning = false;
+let currentWheelAngle = 0;
+let lastSpinResultIdx = null;
+
+function openLuckyWheelModal(x, y) {
+  const modal = document.getElementById('modal-wheel');
+  if (!modal) return;
+  
+  // Set spin cost
+  const cost = 200 * (S.stage + 1);
+  const costEl = document.getElementById('spin-cost-val');
+  if (costEl) costEl.textContent = `$${cost}`;
+  
+  // Clear result message
+  const resultMsg = document.getElementById('wheel-result-msg');
+  if (resultMsg) {
+    resultMsg.textContent = '';
+    resultMsg.className = 'wheel-result-msg';
+  }
+  
+  // Reset wheel canvas rotation
+  const wheelCanvas = document.getElementById('wheel-canvas');
+  if (wheelCanvas) {
+    wheelCanvas.style.transition = 'none';
+    wheelCanvas.style.transform = 'rotate(0deg)';
+    currentWheelAngle = 0;
+  }
+  
+  modal.classList.remove('hidden');
+  
+  // Draw wheel sectors
+  setTimeout(() => {
+    drawLuckyWheel();
+  }, 50);
+}
+
+function drawLuckyWheel() {
+  const canvas = document.getElementById('wheel-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r = canvas.width / 2;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const sectors = [
+    { label: "รางวัลใหญ่! 👑", color: "#10b981" },
+    { label: "หักเงิน 30% 💀", color: "#b91c1c" },
+    { label: "หักเงิน 50% 💀", color: "#991b1b" },
+    { label: "เครื่องระเบิด 💥", color: "#7f1d1d" },
+    { label: "เหมืองถล่ม ⛏️", color: "#b91c1c" },
+    { label: "สายพานขาด ⛓️", color: "#991b1b" },
+    { label: "ภัยพิบัติโรงงาน 💀", color: "#7f1d1d" }
+  ];
+  
+  const numSectors = sectors.length;
+  const arcSize = (Math.PI * 2) / numSectors;
+  
+  for (let i = 0; i < numSectors; i++) {
+    const angle = i * arcSize;
+    
+    // Draw sector pie slice
+    ctx.fillStyle = sectors[i].color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle, angle + arcSize);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Stroke line separator
+    ctx.strokeStyle = '#0f111a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Text label
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle + arcSize / 2);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9.5px Kanit, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(sectors[i].label, r - 15, 0);
+    ctx.restore();
+  }
+  
+  // Center cap decoration
+  ctx.fillStyle = '#0f111a';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ff9c1a';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
+
+function spinLuckyWheel() {
+  if (isSpinning) return;
+  
+  const cost = 200 * (S.stage + 1);
+  if (S.cash < cost) {
+    notify('❌', 'เงินสดของคุณไม่เพียงพอสำหรับหมุนวงล้อ!', 'error');
+    return;
+  }
+  
+  // Deduct cost
+  S.cash -= cost;
+  updateUI();
+  
+  isSpinning = true;
+  
+  const resultMsg = document.getElementById('wheel-result-msg');
+  if (resultMsg) {
+    resultMsg.textContent = 'กำลังเสี่ยงโชค... 🎰';
+    resultMsg.className = 'wheel-result-msg';
+  }
+  
+  const wheelCanvas = document.getElementById('wheel-canvas');
+  if (wheelCanvas) {
+    // 1 in 7 sectors. Sector 0 is win, 1-6 are lose.
+    const targetIdx = Math.floor(Math.random() * 7);
+    lastSpinResultIdx = targetIdx;
+    
+    // Calculate exact rotation target in degrees
+    const targetAngle = 1800 + (270 - (targetIdx + 0.5) * (360 / 7));
+    currentWheelAngle = targetAngle;
+    
+    wheelCanvas.style.transition = 'transform 4s cubic-bezier(0.1, 0.8, 0.1, 1)';
+    wheelCanvas.style.transform = `rotate(${targetAngle}deg)`;
+  }
+}
+
+function resolveSpinOutcome() {
+  isSpinning = false;
+  const targetIdx = lastSpinResultIdx;
+  if (targetIdx === null) return;
+  
+  const resultMsg = document.getElementById('wheel-result-msg');
+  
+  if (targetIdx === 0) {
+    // WIN!
+    const cashReward = Math.floor(Math.max(1500, S.incomePerSec * 60) * (1.0 + S.stage * 0.5));
+    const rpReward = 5;
+    
+    S.cash += cashReward;
+    S.rp += rpReward;
+    updateUI();
+    
+    if (resultMsg) {
+      resultMsg.textContent = `ยินดีด้วย! คุณได้รับเงินสด $${cashReward.toLocaleString()} และ +5 RP! 👑`;
+      resultMsg.className = 'wheel-result-msg win';
+    }
+    
+    // Sparkle explosion in center of canvas
+    spawnParticles(canvas.width / 2, canvas.height / 2, '#10b981', 30);
+    spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, `รางวัลใหญ่! +$${cashReward.toLocaleString()} 👑`, '#10b981');
+    notify('🎉', 'สปินชนะรางวัลใหญ่!', 'success');
+  } else {
+    // LOSE!
+    let penaltyDesc = '';
+    let flatDeduct = 0;
+    
+    switch (targetIdx) {
+      case 1: // Lose 30% of cash
+        const loss1 = Math.floor(S.cash * 0.30);
+        S.cash -= loss1;
+        penaltyDesc = `โชคร้าย! สูญเสียเงินสด 30% (-$${loss1.toLocaleString()}) 💀`;
+        break;
+      case 2: // Lose 50% of cash
+        const loss2 = Math.floor(S.cash * 0.50);
+        S.cash -= loss2;
+        penaltyDesc = `โชคร้ายมาก! สูญเสียเงินสด 50% (-$${loss2.toLocaleString()}) 💀`;
+        break;
+      case 3: // Demolish 1 processing building + lose $200
+        flatDeduct = Math.min(S.cash, 200);
+        S.cash -= flatDeduct;
+        const bType3 = demolishRandomBuilding([B.SMELTER, B.STEEL_MILL, B.REFINERY]);
+        penaltyDesc = `เตาหลอมระเบิด! หักเงิน $200 ${bType3 ? `และทำลาย ${BLDG[bType3].name} 1 หลัง` : '(ไม่พบตึกเตาหลอม)'} 💥`;
+        break;
+      case 4: // Demolish 1 production/research building + lose $150
+        flatDeduct = Math.min(S.cash, 150);
+        S.cash -= flatDeduct;
+        const bType4 = demolishRandomBuilding([B.ORE_MINE, B.RESEARCH_LAB]);
+        penaltyDesc = `เหมือง/แล็บถล่ม! หักเงิน $150 ${bType4 ? `และทำลาย ${BLDG[bType4].name} 1 หลัง` : '(ไม่พบตึกดังกล่าว)'} ⛏️`;
+        break;
+      case 5: // Demolish 3 conveyors
+        const countConveyors = demolishConveyors(3);
+        penaltyDesc = `สายพานขาดสะบั้น! ทำลายสายพานสุ่ม ${countConveyors} ช่องในโรงงาน ⛓️`;
+        break;
+      case 6: // Demolish 1 random building + lose 20% cash
+        const loss6 = Math.floor(S.cash * 0.20);
+        S.cash -= loss6;
+        const bType6 = demolishRandomBuilding(null); // null means any building
+        penaltyDesc = `ภัยพิบัติโรงงาน! หักเงิน 20% (-$${loss6.toLocaleString()}) ${bType6 ? `และทำลาย ${BLDG[bType6].name} 1 หลัง` : ''} 💀`;
+        break;
+    }
+    
+    updateUI();
+    if (resultMsg) {
+      resultMsg.textContent = penaltyDesc;
+      resultMsg.className = 'wheel-result-msg lose';
+    }
+    notify('💀', 'คุณหมุนได้ช่องบทลงโทษ!', 'error');
+  }
+}
+
+function demolishRandomBuilding(typesArray) {
+  // Find all coordinates containing building types in typesArray
+  const matches = [];
+  for (let y = 0; y < S.gridH; y++) {
+    for (let x = 0; x < S.gridW; x++) {
+      const cell = S.grid[y][x];
+      if (cell.type === B.EMPTY || cell.type === B.ROAD || cell.type === B.CONVEYOR || cell.type === B.LUCKY_WHEEL) continue;
+      if (!typesArray || typesArray.includes(cell.type)) {
+        matches.push({ x, y, type: cell.type });
+      }
+    }
+  }
+  
+  if (matches.length === 0) return null;
+  
+  const choice = matches[Math.floor(Math.random() * matches.length)];
+  
+  // Demolish it!
+  const cell = S.grid[choice.y][choice.x];
+  // Reduce count
+  if (S.buildCounts[cell.type] > 0) S.buildCounts[cell.type]--;
+  
+  // Explode particles
+  const px = choice.x * CFG.CELL + CFG.CELL / 2;
+  const py = choice.y * CFG.CELL + CFG.CELL / 2;
+  spawnParticles(px, py, '#ef4444', 15);
+  spawnParticles(px, py, '#555555', 10);
+  spawnFloatText(px, py - 10, 'ตูม! 💥', '#ef4444');
+  
+  // Reset cell
+  S.grid[choice.y][choice.x] = createCell(B.EMPTY);
+  
+  // Auto-save silently to persist destruction
+  saveGameSilent();
+  return choice.type;
+}
+
+function demolishConveyors(count) {
+  const matches = [];
+  for (let y = 0; y < S.gridH; y++) {
+    for (let x = 0; x < S.gridW; x++) {
+      const cell = S.grid[y][x];
+      if (cell.type === B.CONVEYOR) {
+        matches.push({ x, y });
+      }
+    }
+  }
+  
+  if (matches.length === 0) return 0;
+  
+  // Shuffle matches
+  for (let i = matches.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [matches[i], matches[j]] = [matches[j], matches[i]];
+  }
+  
+  const toDemolish = matches.slice(0, Math.min(count, matches.length));
+  for (const choice of toDemolish) {
+    const cell = S.grid[choice.y][choice.x];
+    if (S.buildCounts[B.CONVEYOR] > 0) S.buildCounts[B.CONVEYOR]--;
+    
+    // Explode particles
+    const px = choice.x * CFG.CELL + CFG.CELL / 2;
+    const py = choice.y * CFG.CELL + CFG.CELL / 2;
+    spawnParticles(px, py, '#777777', 6);
+    
+    S.grid[choice.y][choice.x] = createCell(B.EMPTY);
+  }
+  
+  saveGameSilent();
+  return toDemolish.length;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1995,6 +2289,10 @@ function setupInput() {
 
     // Select building for upgrade
     const cell = getCell(x, y);
+    if (cell && cell.type === B.LUCKY_WHEEL) {
+      openLuckyWheelModal(x, y);
+      return;
+    }
     if (cell && cell.type !== B.EMPTY) {
       S.selectedCell = { x, y };
       switchTab('upgrade');
@@ -2129,6 +2427,15 @@ function setupInput() {
     document.getElementById('toggle-codex-buildings').classList.add('active');
     populateCodex();
   });
+
+  // Lucky Wheel Modal
+  document.getElementById('btn-spin-wheel').addEventListener('click', spinLuckyWheel);
+  document.getElementById('btn-close-wheel').addEventListener('click', () => {
+    if (!isSpinning) {
+      document.getElementById('modal-wheel').classList.add('hidden');
+    }
+  });
+  document.getElementById('wheel-canvas').addEventListener('transitionend', resolveSpinOutcome);
 }
 
 function toggleSpeed() {
